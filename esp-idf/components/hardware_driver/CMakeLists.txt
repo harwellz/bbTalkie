@@ -43,6 +43,7 @@ idf_component_register(
         "boards/include"
     REQUIRES
         driver
+        esp_timer
         fatfs
         spiffs
         )

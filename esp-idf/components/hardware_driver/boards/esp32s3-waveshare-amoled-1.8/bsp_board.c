@@ -7,7 +7,8 @@
  * - esp_codec_dev ES8311 driver: with no_dac_ref = false and 2-channel recording, the left channel is the
  *   ADC (mic) and the right channel is the DAC output (reg 0x44 = 0x58)
  *   https://github.com/espressif/esp-adf/tree/master/components/esp_codec_dev
- * - xiaozhi-esp32 Es8311AudioCodec (duplex I2S master, MCLK = 256 * fs, one IN_OUT codec device)
+ * - xiaozhi-esp32 Es8311AudioCodec (duplex I2S master, MCLK = 256 * fs, one IN_OUT codec device; the PA pin
+ *   is only driven high while output is enabled, see UpdateDeviceState())
  *   https://github.com/78/xiaozhi-esp32/blob/main/main/audio/codecs/es8311_audio_codec.cc
  */
 
@@ -21,6 +22,7 @@
 #include "esp_codec_dev_defaults.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
 
@@ -30,6 +32,7 @@
 #define BOARD_I2S_CHANNELS      (2)     /* left: mic, right: ES8311 DAC reference */
 #define BOARD_MIC_GAIN_DB       (30.0)
 #define BOARD_DEFAULT_VOLUME    (90)
+#define BOARD_PA_IDLE_OFF_US    (1000 * 1000) /* speaker amp off after 1 s without playback */
 
 static const char *TAG = "board";
 
@@ -39,6 +42,13 @@ static i2s_chan_handle_t rx_handle = NULL;
 static esp_codec_dev_handle_t codec_dev = NULL;
 static sdmmc_card_t *card = NULL;
 static int play_volume = BOARD_DEFAULT_VOLUME;
+static esp_timer_handle_t pa_off_timer = NULL;
+
+/* Keeping the speaker amp on while idle makes display / Wi-Fi interference audible */
+static void pa_off_cb(void *arg)
+{
+    gpio_set_level(GPIO_POWER_AMP, 0);
+}
 
 i2c_master_bus_handle_t bsp_board_get_i2c_bus(void)
 {
@@ -168,6 +178,16 @@ static esp_err_t bsp_codec_init(uint32_t sample_rate)
     esp_codec_dev_set_in_gain(codec_dev, BOARD_MIC_GAIN_DB);
     esp_codec_dev_set_out_vol(codec_dev, play_volume);
 
+    /* esp_codec_dev enables the PA on open; keep it off until something is played */
+    const esp_timer_create_args_t timer_args = {
+        .callback = pa_off_cb,
+        .name = "pa_off",
+    };
+    if (esp_timer_create(&timer_args, &pa_off_timer) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    gpio_set_level(GPIO_POWER_AMP, 0);
+
     return ESP_OK;
 }
 
@@ -201,6 +221,10 @@ esp_err_t bsp_audio_play(const int16_t *data, int length, TickType_t ticks_to_wa
         stereo_buffer[i * 2] = data[i];
         stereo_buffer[i * 2 + 1] = data[i];
     }
+
+    gpio_set_level(GPIO_POWER_AMP, 1);
+    esp_timer_stop(pa_off_timer);
+    esp_timer_start_once(pa_off_timer, BOARD_PA_IDLE_OFF_US);
 
     int ret = esp_codec_dev_write(codec_dev, stereo_buffer, length * BOARD_I2S_CHANNELS * sizeof(int16_t));
     free(stereo_buffer);
