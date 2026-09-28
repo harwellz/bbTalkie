@@ -1,4 +1,9 @@
+#pragma once
+
+#include <stdbool.h>
 #include <inttypes.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "driver/spi_master.h"
 
 // Display dimensions
