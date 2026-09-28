@@ -152,8 +152,10 @@ static bool button_initialized = false;
 static const char *TAG = "bbTalkie";
 spi_device_handle_t oled_dev_handle;
 struct spi_ssd1327 spi_ssd1327 = {
+#if BOARD_HAS_SSD1327_SPI
     .dc_pin_num = DC_PIN_NUM,
     .rst_pin_num = RST_PIN_NUM,
+#endif
     .spi_handle = &oled_dev_handle,
 };
 SemaphoreHandle_t spi_mutex;
@@ -1034,6 +1036,7 @@ void draw_status()
 void setup_oled(){
         // This task is responsible for handling the OLED display
     spi_mutex = xSemaphoreCreateMutex();
+#if BOARD_HAS_SSD1327_SPI
     spi_bus_config_t spi_bus_cfg = {
         .miso_io_num = -1,
         .mosi_io_num = SPI_MOSI_PIN_NUM,
@@ -1068,6 +1071,7 @@ void setup_oled(){
         .pull_up_en = GPIO_PULLUP_ENABLE,
     };
     gpio_config(&io_conf2);
+#endif
 
     spi_oled_init(&spi_ssd1327);
 }

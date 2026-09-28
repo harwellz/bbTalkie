@@ -23,7 +23,8 @@
 #define GPIO_I2S_SDIN           (GPIO_NUM_10)
 #define GPIO_POWER_AMP          (GPIO_NUM_46)
 
-/* CO5300 AMOLED on QSPI (no reset / backlight GPIO) */
+/* CO5300 AMOLED on QSPI (no reset / backlight GPIO), driven by esp32-spi-ssd1327/amoled_co5300.c */
+#define BOARD_HAS_SSD1327_SPI   (0)
 #define BOARD_LCD_SPI_HOST      (SPI2_HOST)
 #define BOARD_LCD_CS            (GPIO_NUM_12)
 #define BOARD_LCD_PCLK          (GPIO_NUM_11)

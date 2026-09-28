@@ -23,3 +23,13 @@ Trước khi implement BẤT KỲ thứ gì (driver, API, thanh ghi, pin, Kconfi
 
 - Firmware: `esp-idf/src` (ESP-IDF v5.4.3), board drivers: `esp-idf/components/hardware_driver/boards/`
 - Driver màn hình hiện tại: `esp-idf/src/components/esp32-spi-ssd1327`
+
+## Trạng thái hỗ trợ Waveshare AMOLED 1.8 (CO5300)
+
+Chọn board: `idf.py menuconfig` → Audio Media HAL → "Waveshare ESP32-S3-Touch-AMOLED-1.8 (CO5300)".
+
+- Audio ES8311: `esp-idf/components/hardware_driver/boards/esp32s3-waveshare-amoled-1.8/bsp_board.c` (AFE input "MR")
+- PMU AXP2101: `.../esp32s3-waveshare-amoled-1.8/bsp_power.c` (API chung `bsp_power_*` trong `bsp_board.h`)
+- Màn hình CO5300: `esp-idf/src/components/esp32-spi-ssd1327/amoled_co5300.c` — giữ framebuffer 128x128 4bpp,
+  phóng 2x ra giữa màn 368x448. Code UI trong `main.c` không đổi.
+- Chưa build/test trên phần cứng thật trong môi trường Claude (không có toolchain ESP-IDF).

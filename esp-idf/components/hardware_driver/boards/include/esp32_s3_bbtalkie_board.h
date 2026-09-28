@@ -93,6 +93,7 @@
 #include "soc/adc_channel.h"
 
 /* SSD1327 128x128 OLED on SPI */
+#define BOARD_HAS_SSD1327_SPI       (1)
 #define BOARD_OLED_SPI_HOST         (SPI2_HOST)
 #define BOARD_OLED_MOSI             (GPIO_NUM_14)
 #define BOARD_OLED_SCK              (GPIO_NUM_13)

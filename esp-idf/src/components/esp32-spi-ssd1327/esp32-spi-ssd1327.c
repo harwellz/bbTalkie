@@ -9,12 +9,19 @@
 #include "freertos/task.h"
 
 #include "esp32-spi-ssd1327.h"
+#include "sdkconfig.h"
+#if CONFIG_ESP32_S3_WAVESHARE_AMOLED_1_8
+#include "amoled_co5300.h"
+#endif
 
 // Helper macro for boundary checking
 #define BOUNDS_CHECK(x, y) ((x) < SSD1327_WIDTH && (y) < SSD1327_HEIGHT)
 
 void spi_oled_init(struct spi_ssd1327 *spi_ssd1327)
 {
+#if CONFIG_ESP32_S3_WAVESHARE_AMOLED_1_8
+    amoled_co5300_init();
+#else
     spi_oled_reset(spi_ssd1327);
 
     /* Turn the display off (datasheet p. 49) */
@@ -65,6 +72,7 @@ void spi_oled_init(struct spi_ssd1327 *spi_ssd1327)
 
     /* Turn the display on */
     spi_oled_send_cmd(spi_ssd1327, 0xAF);
+#endif
 
     // Initialize frame buffer
     spi_oled_framebuffer_init(spi_ssd1327);
@@ -74,6 +82,9 @@ void spi_oled_init(struct spi_ssd1327 *spi_ssd1327)
 
 void spi_oled_deinit(struct spi_ssd1327 *spi_ssd1327)
 {
+#if CONFIG_ESP32_S3_WAVESHARE_AMOLED_1_8
+    amoled_co5300_deinit();
+#else
     /* Clear the display buffer to prevent burn-in */
     spi_oled_send_cmd(spi_ssd1327, 0xA5);
 
@@ -91,6 +102,7 @@ void spi_oled_deinit(struct spi_ssd1327 *spi_ssd1327)
     spi_oled_send_cmd_arg(spi_ssd1327, 0xB3, 0x00);
     spi_oled_send_cmd_arg(spi_ssd1327, 0xB1, 0x11);
     spi_oled_send_cmd_arg(spi_ssd1327, 0xB6, 0x00);
+#endif
 
     // Free frame buffer
     spi_oled_framebuffer_free(spi_ssd1327);
@@ -207,6 +219,9 @@ void spi_oled_framebuffer_refresh(struct spi_ssd1327 *spi_ssd1327)
     // Take mutex with timeout to prevent deadlock
     if (xSemaphoreTake(spi_ssd1327->display_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         
+#if CONFIG_ESP32_S3_WAVESHARE_AMOLED_1_8
+        amoled_co5300_flush(spi_ssd1327, 0, 0, SSD1327_WIDTH, SSD1327_HEIGHT);
+#else
         // Set full screen address window
         spi_oled_send_cmd(spi_ssd1327, 0x15);  // Set Column Address
         spi_oled_send_cmd(spi_ssd1327, 0x00);  // Column start
@@ -218,6 +233,7 @@ void spi_oled_framebuffer_refresh(struct spi_ssd1327 *spi_ssd1327)
         
         // Send entire frame buffer
         spi_oled_send_data(spi_ssd1327, spi_ssd1327->framebuffer, SSD1327_BUFFER_SIZE * 8);
+#endif
         
         // Release mutex
         xSemaphoreGive(spi_ssd1327->display_mutex);
@@ -237,7 +253,9 @@ void spi_oled_framebuffer_refresh_region(struct spi_ssd1327 *spi_ssd1327,
     
     // Take mutex with timeout
     if (xSemaphoreTake(spi_ssd1327->display_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        
+#if CONFIG_ESP32_S3_WAVESHARE_AMOLED_1_8
+        amoled_co5300_flush(spi_ssd1327, x, y, width, height);
+#else
         uint8_t start_col = x / 2;
         uint8_t end_col = (x + width - 1) / 2;
         
@@ -255,6 +273,7 @@ void spi_oled_framebuffer_refresh_region(struct spi_ssd1327 *spi_ssd1327,
             uint16_t offset = ((y + row) * (SSD1327_WIDTH / 2)) + start_col;
             spi_oled_send_data(spi_ssd1327, &spi_ssd1327->framebuffer[offset], bytes_per_row * 8);
         }
+#endif
         
         // Release mutex
         xSemaphoreGive(spi_ssd1327->display_mutex);
