@@ -22,8 +22,9 @@ if(CONFIG_ESP32_S3_BBTALKIE)
 endif()
 
 if(CONFIG_ESP32_S3_WAVESHARE_AMOLED_1_8)
+    list(APPEND BSP_BOARD_SRC "./boards/esp32s3-waveshare-amoled-1.8")
     message(FATAL_ERROR "Waveshare ESP32-S3-Touch-AMOLED-1.8 support is work in progress: "
-                        "audio (ES8311), power (AXP2101) and display (CO5300) drivers are not implemented yet.")
+                        "power (AXP2101) and display (CO5300) drivers are not implemented yet.")
 endif()
 
 if(CONFIG_ESP32_S3_EYE_BOARD)

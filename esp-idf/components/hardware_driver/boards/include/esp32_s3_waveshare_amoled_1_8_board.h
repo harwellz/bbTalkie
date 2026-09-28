@@ -9,6 +9,7 @@
 
 #include "driver/gpio.h"
 #include "esp_idf_version.h"
+#include "driver/i2c_master.h"
 
 /* Shared I2C bus: ES8311, AXP2101, TCA9554, touch, RTC, IMU */
 #define GPIO_I2C_SCL            (GPIO_NUM_14)
@@ -41,3 +42,8 @@
 #define GPIO_SDMMC_CLK          (GPIO_NUM_2)
 #define GPIO_SDMMC_CMD          (GPIO_NUM_1)
 #define GPIO_SDMMC_D0           (GPIO_NUM_3)
+
+/**
+ * @brief Shared I2C master bus, created by bsp_board_init()
+ */
+i2c_master_bus_handle_t bsp_board_get_i2c_bus(void);
