@@ -47,6 +47,8 @@
     #include "esp32_s3_box_3_board.h"
 #elif CONFIG_ESP32_S3_BBTALKIE
     #include "esp32_s3_bbtalkie_board.h"
+#elif CONFIG_ESP32_S3_WAVESHARE_AMOLED_1_8
+    #include "esp32_s3_waveshare_amoled_1_8_board.h"
 #elif CONFIG_ESP32_P4_FUNCTION_EV_BOARD
     #include "esp32_p4_function_ev_board.h"
 #else 

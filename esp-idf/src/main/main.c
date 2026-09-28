@@ -18,6 +18,7 @@
 #include "esp_mn_iface.h"
 #include "esp_mn_models.h"
 #include "esp_board_init.h"
+#include "bsp_board.h"
 #include "model_path.h"
 #include <math.h> // Add this for sin() function
 #include <string.h>
@@ -80,19 +81,19 @@
 #define PLAY_CHUNK_SIZE 512
 #define ESP_NOW_PACKET_SIZE 512
 
-#define SPI_MOSI_PIN_NUM 14
-#define SPI_SCK_PIN_NUM 13
-#define SPI_CS_PIN_NUM 10
-#define DC_PIN_NUM 12
-#define RST_PIN_NUM 11
-#define SPI_HOST_TAG SPI2_HOST
+#define SPI_MOSI_PIN_NUM BOARD_OLED_MOSI
+#define SPI_SCK_PIN_NUM BOARD_OLED_SCK
+#define SPI_CS_PIN_NUM BOARD_OLED_CS
+#define DC_PIN_NUM BOARD_OLED_DC
+#define RST_PIN_NUM BOARD_OLED_RST
+#define SPI_HOST_TAG BOARD_OLED_SPI_HOST
 
-#define GPIO_WAKEUP_1 GPIO_NUM_4 // Charger CHRG
-#define GPIO_WAKEUP_2 GPIO_NUM_8 // Button
-#define GPIO_WAKEUP_3 GPIO_NUM_5 // Charger STDBY
+#define GPIO_WAKEUP_1 BOARD_CHARGER_CHRG_GPIO  // Charger CHRG
+#define GPIO_WAKEUP_2 BOARD_BUTTON_GPIO        // Button
+#define GPIO_WAKEUP_3 BOARD_CHARGER_STDBY_GPIO // Charger STDBY
 
 // Button configuration
-#define BUTTON_GPIO 8           // Boot button on most ESP32 boards
+#define BUTTON_GPIO BOARD_BUTTON_GPIO
 #define BUTTON_ACTIVE_LEVEL 0   // Active low (pressed = 0)
 #define LONG_PRESS_TIME_MS 2000 // 2 seconds for long press
 
@@ -961,8 +962,8 @@ void byebye_anim(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(anim->frame_delay_ms));
     }
     // spi_oled_deinit(&spi_ssd1327);
-    gpio_set_level(GPIO_NUM_3, 0);
-    gpio_set_level(GPIO_NUM_9, 0);
+    gpio_set_level(BOARD_AMP_EN_GPIO, 0);
+    gpio_set_level(BOARD_PERIPH_PWR_EN_GPIO, 0);
     esp_deep_sleep_start();
     vTaskDelete(NULL);
 }
@@ -1047,7 +1048,7 @@ void setup_oled(){
         .quadhd_io_num = -1,
     };
 
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO));
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST_TAG, &spi_bus_cfg, SPI_DMA_CH_AUTO));
 
     /* 2. Configure the spi device */
     spi_device_interface_config_t dev_cfg = {
@@ -1081,10 +1082,10 @@ void batteryLevel_Task(void *pvParameters)
 {
     // Better ADC config for battery monitoring
     adc1_config_width(ADC_WIDTH_BIT_12);
-    adc1_config_channel_atten(ADC1_GPIO7_CHANNEL, ADC_ATTEN_DB_6); // 0-2.2V range, better for battery （4.2V max / 2 by resistors）
+    adc1_config_channel_atten(BOARD_BATTERY_ADC1_CHANNEL, ADC_ATTEN_DB_6); // 0-2.2V range, better for battery （4.2V max / 2 by resistors）
 
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << GPIO_NUM_4) | (1ULL << GPIO_NUM_5),
+        .pin_bit_mask = (1ULL << BOARD_CHARGER_CHRG_GPIO) | (1ULL << BOARD_CHARGER_STDBY_GPIO),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -1100,14 +1101,14 @@ void batteryLevel_Task(void *pvParameters)
     {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-        int gpio4 = gpio_get_level(GPIO_NUM_4);
-        int gpio5 = gpio_get_level(GPIO_NUM_5);
+        int gpio4 = gpio_get_level(BOARD_CHARGER_CHRG_GPIO);
+        int gpio5 = gpio_get_level(BOARD_CHARGER_STDBY_GPIO);
         bool gpio_changed = (gpio4 != prev_gpio4 || gpio5 != prev_gpio5);
 
         int battery_level = prev_battery_level;
         if (now - last_battery_check >= 60000 || prev_battery_level == -1)
         {
-            int adc_raw = adc1_get_raw(ADC1_GPIO7_CHANNEL);
+            int adc_raw = adc1_get_raw(BOARD_BATTERY_ADC1_CHANNEL);
             float voltage = (adc_raw * 2.2f / 4095.0f) * 2.0f; // Convert to actual battery voltage
 
             if (voltage >= 4.0f)
@@ -1307,10 +1308,10 @@ void charging_Task(void *pvParameters)
     gpio_isr_handler_add(GPIO_WAKEUP_2, button_isr_handler, NULL);
     // Better ADC config for battery monitoring
     adc1_config_width(ADC_WIDTH_BIT_12);
-    adc1_config_channel_atten(ADC1_GPIO7_CHANNEL, ADC_ATTEN_DB_6); // 0-2.2V range, better for battery （4.2V max / 2 by resistors）
+    adc1_config_channel_atten(BOARD_BATTERY_ADC1_CHANNEL, ADC_ATTEN_DB_6); // 0-2.2V range, better for battery （4.2V max / 2 by resistors）
 
     gpio_config_t io_conf2 = {
-        .pin_bit_mask = (1ULL << GPIO_NUM_4) | (1ULL << GPIO_NUM_5),
+        .pin_bit_mask = (1ULL << BOARD_CHARGER_CHRG_GPIO) | (1ULL << BOARD_CHARGER_STDBY_GPIO),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -1327,14 +1328,14 @@ void charging_Task(void *pvParameters)
     {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-        int gpio4 = gpio_get_level(GPIO_NUM_4);
-        int gpio5 = gpio_get_level(GPIO_NUM_5);
+        int gpio4 = gpio_get_level(BOARD_CHARGER_CHRG_GPIO);
+        int gpio5 = gpio_get_level(BOARD_CHARGER_STDBY_GPIO);
         bool gpio_changed = (gpio4 != prev_gpio4 || gpio5 != prev_gpio5);
 
         int battery_level = prev_battery_level;
         if (now - last_battery_check >= 60000 || prev_battery_level == -1)
         {
-            int adc_raw = adc1_get_raw(ADC1_GPIO7_CHANNEL);
+            int adc_raw = adc1_get_raw(BOARD_BATTERY_ADC1_CHANNEL);
             float voltage = (adc_raw * 2.2f / 4095.0f) * 2.0f; // Convert to actual battery voltage
 
             if (voltage >= 4.0f)
@@ -1382,8 +1383,8 @@ void charging_Task(void *pvParameters)
         {
             // Not charging
             printf("not charging\n");
-            gpio_set_level(GPIO_NUM_3, 0);
-            gpio_set_level(GPIO_NUM_9, 0);
+            gpio_set_level(BOARD_AMP_EN_GPIO, 0);
+            gpio_set_level(BOARD_PERIPH_PWR_EN_GPIO, 0);
             esp_deep_sleep_start();
             vTaskDelete(NULL); // Exit the task if not charging
         }
@@ -1703,7 +1704,7 @@ void app_main()
 
     // Configure output GPIOs first
     gpio_config_t io_conf_3 = {
-        .pin_bit_mask = (1ULL << GPIO_NUM_3),
+        .pin_bit_mask = (1ULL << BOARD_AMP_EN_GPIO),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -1712,7 +1713,7 @@ void app_main()
     gpio_config(&io_conf_3);
 
     gpio_config_t io_conf_9 = {
-        .pin_bit_mask = (1ULL << GPIO_NUM_9),
+        .pin_bit_mask = (1ULL << BOARD_PERIPH_PWR_EN_GPIO),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -1720,8 +1721,8 @@ void app_main()
     };
     gpio_config(&io_conf_9);
 
-    gpio_set_level(GPIO_NUM_3, 1);
-    gpio_set_level(GPIO_NUM_9, 1);
+    gpio_set_level(BOARD_AMP_EN_GPIO, 1);
+    gpio_set_level(BOARD_PERIPH_PWR_EN_GPIO, 1);
 
     // Configure wake up GPIOs
     gpio_config_t io_conf = {

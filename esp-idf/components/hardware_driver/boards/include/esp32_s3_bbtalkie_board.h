@@ -86,6 +86,37 @@
 #define GPIO_PWR_CTRL       (GPIO_NUM_NC)
 #define GPIO_PWR_ON_LEVEL   (1)
 
+/**
+ * @brief bbTalkie application-level IO (see PCB/SCH_bbTalkie.pdf)
+ *
+ */
+#include "soc/adc_channel.h"
+
+/* SSD1327 128x128 OLED on SPI */
+#define BOARD_OLED_SPI_HOST         (SPI2_HOST)
+#define BOARD_OLED_MOSI             (GPIO_NUM_14)
+#define BOARD_OLED_SCK              (GPIO_NUM_13)
+#define BOARD_OLED_CS               (GPIO_NUM_10)
+#define BOARD_OLED_DC               (GPIO_NUM_12)
+#define BOARD_OLED_RST              (GPIO_NUM_11)
+
+/* SW1: button / external wakeup, active low */
+#define BOARD_BUTTON_GPIO           (GPIO_NUM_8)
+
+/* U7 charger status outputs (CHRG / STDBY), active low */
+#define BOARD_CHARGER_CHRG_GPIO     (GPIO_NUM_4)
+#define BOARD_CHARGER_STDBY_GPIO    (GPIO_NUM_5)
+
+/* Battery voltage via R8/R12 divider on IO7 */
+#define BOARD_BATTERY_ADC1_CHANNEL  (ADC1_GPIO7_CHANNEL)
+
+/* U3 I2S amp SD_MODE# (IO3) and U6 load switch ON -> 3.3V_SW (IO9) */
+#define BOARD_AMP_EN_GPIO           (GPIO_NUM_3)
+#define BOARD_PERIPH_PWR_EN_GPIO    (GPIO_NUM_9)
+
+/* LED1 WS2812 */
+#define BOARD_WS2812_GPIO           (GPIO_NUM_15)
+
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 
 #define I2S_CONFIG_DEFAULT(sample_rate, channel_fmt, bits_per_chan) { \

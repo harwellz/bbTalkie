@@ -1,5 +1,5 @@
 #include "led_strip.h"
-#define WS2812_GPIO_PIN 15
+#define WS2812_GPIO_PIN BOARD_WS2812_GPIO
 #define WS2812_LED_COUNT 1
 static led_strip_handle_t led_strip;
 
