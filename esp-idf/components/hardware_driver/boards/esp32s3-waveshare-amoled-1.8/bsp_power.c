@@ -107,15 +107,14 @@ esp_err_t bsp_power_init(void)
 
 bool bsp_power_woke_by_charger(void)
 {
-    // PWRON_STATUS keeps the last PMU power-on source, so only trust it on a real power-on reset
-    if (esp_reset_reason() != ESP_RST_POWERON) {
-        return false;
-    }
+    // Disabled: on real hardware, treating PWRON_STATUS (0x20) bit2 as "powered on by charger" sent the
+    // board into the charging screen, which calls bsp_power_off() when the PMU reports "not charging"
+    // (e.g. no battery), so the board turned itself off right after power-on. Always boot normally.
     uint8_t pwron = 0;
-    if (pmu_read(AXP2101_REG_PWRON_STATUS, &pwron) != ESP_OK) {
-        return false;
+    if (pmu_read(AXP2101_REG_PWRON_STATUS, &pwron) == ESP_OK) {
+        ESP_LOGI(TAG, "PMU power-on status 0x%02X, reset reason %d", pwron, esp_reset_reason());
     }
-    return (pwron & (1 << 2)) != 0;
+    return false;
 }
 
 bsp_charge_state_t bsp_power_get_charge_state(void)
