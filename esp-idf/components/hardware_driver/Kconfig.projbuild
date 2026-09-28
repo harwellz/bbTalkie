@@ -2,7 +2,7 @@ menu "Audio Media HAL"
 
 choice AUDIO_BOARD
     prompt "Audio hardware board"
-    default ESP32_S3_KORVO_1_V4_0_BOARD
+    default ESP32_S3_BBTALKIE
     help
         Select an audio board to use
 
