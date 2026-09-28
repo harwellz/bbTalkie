@@ -773,6 +773,12 @@ void detect_Task(void *arg)
     esp_afe_sr_data_t *afe_data = arg;
     int afe_chunksize = afe_handle->get_fetch_chunksize(afe_data);
     char *mn_name = esp_srmodel_filter(models, ESP_MN_PREFIX, ESP_MN_CHINESE);
+    if (mn_name == NULL)
+    {
+        ESP_LOGE(TAG, "No Chinese MultiNet model found, enable one in menuconfig (ESP Speech Recognition)");
+        vTaskDelete(NULL);
+        return;
+    }
     printf("multinet:%s\n", mn_name);
     esp_mn_iface_t *multinet = esp_mn_handle_from_name(mn_name);
     model_iface_data_t *model_data = multinet->create(mn_name, 1488);
