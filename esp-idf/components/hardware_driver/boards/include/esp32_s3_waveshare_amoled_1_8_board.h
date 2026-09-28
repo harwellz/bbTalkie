@@ -38,6 +38,13 @@
 /* Touch interrupt (reset is not a direct GPIO) */
 #define BOARD_TOUCH_INT         (GPIO_NUM_21)
 
+/* BOOT button, active low (xiaozhi-esp32 boards/waveshare/esp32-s3-touch-amoled-1.8-v2/config.h).
+ * The PWR key is wired to the AXP2101, not to a GPIO. */
+#define BOARD_BUTTON_GPIO       (GPIO_NUM_0)
+
+/* No WS2812 on this board (GPIO15 is I2C SDA) */
+#define BOARD_HAS_WS2812        (0)
+
 /* microSD, SDMMC 1-bit */
 #define GPIO_SDMMC_CLK          (GPIO_NUM_2)
 #define GPIO_SDMMC_CMD          (GPIO_NUM_1)

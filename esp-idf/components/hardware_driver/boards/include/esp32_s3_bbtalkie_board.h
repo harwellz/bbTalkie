@@ -115,6 +115,7 @@
 #define BOARD_PERIPH_PWR_EN_GPIO    (GPIO_NUM_9)
 
 /* LED1 WS2812 */
+#define BOARD_HAS_WS2812            (1)
 #define BOARD_WS2812_GPIO           (GPIO_NUM_15)
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)

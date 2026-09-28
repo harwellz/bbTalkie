@@ -150,6 +150,41 @@ esp_err_t bsp_audio_set_play_vol(int volume);
  */
 esp_err_t bsp_audio_get_play_vol(int *volume);
 
+/**
+ * @brief Charger state reported by the board
+ */
+typedef enum {
+    BSP_CHARGE_STATE_NONE = 0,  /*!< Not charging (running on battery) */
+    BSP_CHARGE_STATE_CHARGING,  /*!< Charging */
+    BSP_CHARGE_STATE_FULL,      /*!< Charge done, still on external power */
+} bsp_charge_state_t;
+
+/**
+ * @brief Power on board peripherals, set up battery / charger monitoring and deep-sleep wakeup sources.
+ *        Must be called after bsp_board_init().
+ */
+esp_err_t bsp_power_init(void);
+
+/**
+ * @brief Whether this boot was caused by the charger being connected
+ */
+bool bsp_power_woke_by_charger(void);
+
+/**
+ * @brief Get current charger state
+ */
+bsp_charge_state_t bsp_power_get_charge_state(void);
+
+/**
+ * @brief Get battery voltage in millivolts, or -1 if not available
+ */
+int bsp_power_get_battery_mv(void);
+
+/**
+ * @brief Power off peripherals and turn the device off (deep sleep or PMU power-off). Does not return.
+ */
+void bsp_power_off(void);
+
 
 #ifdef __cplusplus
 }

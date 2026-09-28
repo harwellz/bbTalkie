@@ -1,7 +1,9 @@
 #include "led_strip.h"
+#if BOARD_HAS_WS2812
 #define WS2812_GPIO_PIN BOARD_WS2812_GPIO
 #define WS2812_LED_COUNT 1
 static led_strip_handle_t led_strip;
+#endif
 
 // LED state structure
 typedef struct
@@ -45,6 +47,10 @@ static float breathing_multiplier(uint32_t time_ms)
 // Apply color to LED strip
 static void set_led_color(led_color_t color)
 {
+#if BOARD_HAS_WS2812
     ESP_ERROR_CHECK(led_strip_set_pixel(led_strip, 0, color.r, color.g, color.b));
     ESP_ERROR_CHECK(led_strip_refresh(led_strip));
+#else
+    (void)color;
+#endif
 }

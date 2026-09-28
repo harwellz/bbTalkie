@@ -88,10 +88,6 @@
 #define RST_PIN_NUM BOARD_OLED_RST
 #define SPI_HOST_TAG BOARD_OLED_SPI_HOST
 
-#define GPIO_WAKEUP_1 BOARD_CHARGER_CHRG_GPIO  // Charger CHRG
-#define GPIO_WAKEUP_2 BOARD_BUTTON_GPIO        // Button
-#define GPIO_WAKEUP_3 BOARD_CHARGER_STDBY_GPIO // Charger STDBY
-
 // Button configuration
 #define BUTTON_GPIO BOARD_BUTTON_GPIO
 #define BUTTON_ACTIVE_LEVEL 0   // Active low (pressed = 0)
@@ -962,9 +958,7 @@ void byebye_anim(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(anim->frame_delay_ms));
     }
     // spi_oled_deinit(&spi_ssd1327);
-    gpio_set_level(BOARD_AMP_EN_GPIO, 0);
-    gpio_set_level(BOARD_PERIPH_PWR_EN_GPIO, 0);
-    esp_deep_sleep_start();
+    bsp_power_off();
     vTaskDelete(NULL);
 }
 
@@ -1078,21 +1072,28 @@ void setup_oled(){
     spi_oled_init(&spi_ssd1327);
 }
 
+// Battery level 1..4 from battery voltage
+static int get_battery_level(void)
+{
+    int battery_mv = bsp_power_get_battery_mv();
+    if (battery_mv < 0)
+        return 4; // No battery detected, running from external power
+
+    float voltage = battery_mv / 1000.0f;
+    if (voltage >= 4.0f)
+        return 4;
+    else if (voltage >= 3.8f)
+        return 3;
+    else if (voltage >= 3.6f)
+        return 2;
+    else
+        return 1;
+}
+
 void batteryLevel_Task(void *pvParameters)
 {
-    // Better ADC config for battery monitoring
-    adc1_config_width(ADC_WIDTH_BIT_12);
-    adc1_config_channel_atten(BOARD_BATTERY_ADC1_CHANNEL, ADC_ATTEN_DB_6); // 0-2.2V range, better for battery （4.2V max / 2 by resistors）
-
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << BOARD_CHARGER_CHRG_GPIO) | (1ULL << BOARD_CHARGER_STDBY_GPIO),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE};
-    gpio_config(&io_conf);
-
-    int prev_gpio4 = -1, prev_gpio5 = -1, prev_battery_level = -1;
+    // Battery / charger monitoring is set up by bsp_power_init()
+    int prev_charge_state = -1, prev_battery_level = -1;
     uint32_t last_battery_check = 0;
     uint32_t last_blink = 0;
     bool blink_state = false;
@@ -1101,31 +1102,19 @@ void batteryLevel_Task(void *pvParameters)
     {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-        int gpio4 = gpio_get_level(BOARD_CHARGER_CHRG_GPIO);
-        int gpio5 = gpio_get_level(BOARD_CHARGER_STDBY_GPIO);
-        bool gpio_changed = (gpio4 != prev_gpio4 || gpio5 != prev_gpio5);
+        int charge_state = bsp_power_get_charge_state();
+        bool gpio_changed = (charge_state != prev_charge_state);
 
         int battery_level = prev_battery_level;
         if (now - last_battery_check >= 60000 || prev_battery_level == -1)
         {
-            int adc_raw = adc1_get_raw(BOARD_BATTERY_ADC1_CHANNEL);
-            float voltage = (adc_raw * 2.2f / 4095.0f) * 2.0f; // Convert to actual battery voltage
-
-            if (voltage >= 4.0f)
-                battery_level = 4;
-            else if (voltage >= 3.8f)
-                battery_level = 3;
-            else if (voltage >= 3.6f)
-                battery_level = 2;
-            else
-                battery_level = 1;
-
+            battery_level = get_battery_level();
             last_battery_check = now;
         }
 
         bool need_update = gpio_changed || (battery_level != prev_battery_level);
         const uint8_t *icons[] = {(const uint8_t *)battery_1, (const uint8_t *)battery_2, (const uint8_t *)battery_3, (const uint8_t *)battery_4};
-        if (gpio5 == 0)
+        if (charge_state == BSP_CHARGE_STATE_FULL)
         {
             // Charge full
             if (need_update)
@@ -1133,7 +1122,7 @@ void batteryLevel_Task(void *pvParameters)
                 spi_oled_drawImage(&spi_ssd1327, 112, 0, 16, 10, (const uint8_t *)battery_full, SSD1327_GS_15);
             }
         }
-        else if (gpio4 == 0)
+        else if (charge_state == BSP_CHARGE_STATE_CHARGING)
         {
             // Charging - blink
             if (now - last_blink >= 500 || need_update)
@@ -1153,8 +1142,7 @@ void batteryLevel_Task(void *pvParameters)
             }
         }
 
-        prev_gpio4 = gpio4;
-        prev_gpio5 = gpio5;
+        prev_charge_state = charge_state;
         prev_battery_level = battery_level;
 
         vTaskDelay(pdMS_TO_TICKS(200));
@@ -1291,9 +1279,9 @@ static void IRAM_ATTR button_isr_handler(void *arg)
 
 void charging_Task(void *pvParameters)
 {
-    // Configure GPIO8 (Button) for interrupt detection
+    // Configure button for interrupt detection
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << GPIO_WAKEUP_2),
+        .pin_bit_mask = (1ULL << BUTTON_GPIO),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -1305,20 +1293,9 @@ void charging_Task(void *pvParameters)
     gpio_install_isr_service(0);
 
     // Add ISR handler for the button
-    gpio_isr_handler_add(GPIO_WAKEUP_2, button_isr_handler, NULL);
-    // Better ADC config for battery monitoring
-    adc1_config_width(ADC_WIDTH_BIT_12);
-    adc1_config_channel_atten(BOARD_BATTERY_ADC1_CHANNEL, ADC_ATTEN_DB_6); // 0-2.2V range, better for battery （4.2V max / 2 by resistors）
-
-    gpio_config_t io_conf2 = {
-        .pin_bit_mask = (1ULL << BOARD_CHARGER_CHRG_GPIO) | (1ULL << BOARD_CHARGER_STDBY_GPIO),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE};
-    gpio_config(&io_conf2);
-
-    int prev_gpio4 = -1, prev_gpio5 = -1, prev_battery_level = -1;
+    gpio_isr_handler_add(BUTTON_GPIO, button_isr_handler, NULL);
+    // Battery / charger monitoring is set up by bsp_power_init()
+    int prev_charge_state = -1, prev_battery_level = -1;
     uint32_t last_battery_check = 0;
     uint32_t last_blink = 0;
     bool blink_state = false;
@@ -1328,31 +1305,19 @@ void charging_Task(void *pvParameters)
     {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-        int gpio4 = gpio_get_level(BOARD_CHARGER_CHRG_GPIO);
-        int gpio5 = gpio_get_level(BOARD_CHARGER_STDBY_GPIO);
-        bool gpio_changed = (gpio4 != prev_gpio4 || gpio5 != prev_gpio5);
+        int charge_state = bsp_power_get_charge_state();
+        bool gpio_changed = (charge_state != prev_charge_state);
 
         int battery_level = prev_battery_level;
         if (now - last_battery_check >= 60000 || prev_battery_level == -1)
         {
-            int adc_raw = adc1_get_raw(BOARD_BATTERY_ADC1_CHANNEL);
-            float voltage = (adc_raw * 2.2f / 4095.0f) * 2.0f; // Convert to actual battery voltage
-
-            if (voltage >= 4.0f)
-                battery_level = 4;
-            else if (voltage >= 3.8f)
-                battery_level = 3;
-            else if (voltage >= 3.6f)
-                battery_level = 2;
-            else
-                battery_level = 1;
-
+            battery_level = get_battery_level();
             last_battery_check = now;
         }
 
         bool need_update = gpio_changed || (battery_level != prev_battery_level);
 
-        if (gpio5 == 0)
+        if (charge_state == BSP_CHARGE_STATE_FULL)
         {
             // Charge full
             if (need_update)
@@ -1362,7 +1327,7 @@ void charging_Task(void *pvParameters)
                 set_led_color(charge_full_color);
             }
         }
-        else if (gpio4 == 0)
+        else if (charge_state == BSP_CHARGE_STATE_CHARGING)
         {
             // Charging - blink
             if (need_update)
@@ -1383,14 +1348,11 @@ void charging_Task(void *pvParameters)
         {
             // Not charging
             printf("not charging\n");
-            gpio_set_level(BOARD_AMP_EN_GPIO, 0);
-            gpio_set_level(BOARD_PERIPH_PWR_EN_GPIO, 0);
-            esp_deep_sleep_start();
+            bsp_power_off();
             vTaskDelete(NULL); // Exit the task if not charging
         }
 
-        prev_gpio4 = gpio4;
-        prev_gpio5 = gpio5;
+        prev_charge_state = charge_state;
         prev_battery_level = battery_level;
 
         vTaskDelay(pdMS_TO_TICKS(200));
@@ -1399,6 +1361,7 @@ void charging_Task(void *pvParameters)
 
 void ws2812_init(void)
 {
+#if BOARD_HAS_WS2812
     ESP_LOGI(TAG, "Initializing WS2812 LED strip");
 
     // LED strip general initialization
@@ -1417,6 +1380,7 @@ void ws2812_init(void)
     };
 
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+#endif
 }
 
 
@@ -1666,9 +1630,7 @@ static esp_err_t init_button(void)
 
 void app_main()
 {
-    // Check which GPIO caused the wakeup (if any)
     ws2812_init();
-    uint64_t wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
     
     // Reset critical flags first
     isShutdown = false;
@@ -1702,59 +1664,15 @@ void app_main()
     printf("agc_init:%d, agc_mode:%d, agc_compression_gain_db:%d, agc_target_level_dbfs:%d\n", 
            afe_config->agc_init, afe_config->agc_mode, afe_config->agc_compression_gain_db, afe_config->agc_target_level_dbfs);
 
-    // Configure output GPIOs first
-    gpio_config_t io_conf_3 = {
-        .pin_bit_mask = (1ULL << BOARD_AMP_EN_GPIO),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_conf_3);
-
-    gpio_config_t io_conf_9 = {
-        .pin_bit_mask = (1ULL << BOARD_PERIPH_PWR_EN_GPIO),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_conf_9);
-
-    gpio_set_level(BOARD_AMP_EN_GPIO, 1);
-    gpio_set_level(BOARD_PERIPH_PWR_EN_GPIO, 1);
-
-    // Configure wake up GPIOs
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << GPIO_WAKEUP_1) | (1ULL << GPIO_WAKEUP_2) | (1ULL << GPIO_WAKEUP_3),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE};
-    gpio_config(&io_conf);
-
-    rtc_gpio_pullup_en(GPIO_WAKEUP_1);
-    rtc_gpio_pullup_en(GPIO_WAKEUP_2);
-    rtc_gpio_pullup_en(GPIO_WAKEUP_3);
-
-    rtc_gpio_pulldown_dis(GPIO_WAKEUP_1);
-    rtc_gpio_pulldown_dis(GPIO_WAKEUP_2);
-    rtc_gpio_pulldown_dis(GPIO_WAKEUP_3);
-
-    esp_sleep_enable_ext1_wakeup((1ULL << GPIO_WAKEUP_1) | (1ULL << GPIO_WAKEUP_2) | (1ULL << GPIO_WAKEUP_3), ESP_EXT1_WAKEUP_ANY_LOW);
+    // Peripheral power, battery / charger monitoring and wakeup sources
+    ESP_ERROR_CHECK(bsp_power_init());
 
     // Handle charging wake-up
-    if ((wakeup_pin_mask & (1ULL << GPIO_WAKEUP_1)) || (wakeup_pin_mask & (1ULL << GPIO_WAKEUP_3)))
+    if (bsp_power_woke_by_charger())
     {
-        printf("Wakeup caused by GPIO4 (Charger CHRG) / GPIO5 (Charger STDBY)\n");
+        printf("Wakeup caused by charger\n");
         xTaskCreatePinnedToCore(charging_Task, "charging", 4 * 1024, NULL, 5, NULL, 0);
         return;
-    }
-
-    // Handle button wake-up
-    if (wakeup_pin_mask & (1ULL << GPIO_WAKEUP_2))
-    {
-        printf("Wakeup caused by GPIO8 (Button)\n");
     }
 
     // Wait for button to be released before initializing it.
@@ -1785,5 +1703,7 @@ void app_main()
     xTaskCreatePinnedToCore(decode_Task, "decode", 4 * 1024, NULL, 5, NULL, 0);
     xTaskCreatePinnedToCore(i2s_writer_task, "i2sWriter", 4 * 1024, NULL, 5, NULL, 0);
     xTaskCreate(ping_task, "ping", 3 * 1024, NULL, 5, NULL);
+#if BOARD_HAS_WS2812
     xTaskCreate(led_control_task, "led_control", 3 * 1024, NULL, 5, NULL);
+#endif
 }
