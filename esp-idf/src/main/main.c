@@ -388,9 +388,18 @@ void bubble_text_task(void *arg)
 }
 
 // ESP-NOW receive callback
+static uint8_t s_own_mac[ESP_NOW_ETH_ALEN];
+
 static void esp_now_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int data_len)
 {
     if (recv_info == NULL || data == NULL || data_len <= 0)
+    {
+        return;
+    }
+
+    // Ignore our own broadcasts if they are echoed back, otherwise we count ourselves as a peer
+    // and play back our own voice
+    if (memcmp(recv_info->src_addr, s_own_mac, ESP_NOW_ETH_ALEN) == 0)
     {
         return;
     }
@@ -538,6 +547,7 @@ bool init_esp_now()
         ESP_LOGE(TAG, "WiFi start failed: %s", esp_err_to_name(ret));
         return false;
     }
+    ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_STA, s_own_mac));
 
     // Initialize ESP-NOW
     ret = esp_now_init();
